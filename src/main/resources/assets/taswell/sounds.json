@@ -1,4 +1,12 @@
 {
+  "local_track": {
+    "sounds": [
+      {
+        "name": "fabric-sound-api-v1:empty",
+        "stream": true
+      }
+    ]
+  },
   "track.11": {
     "sounds": [
       {
