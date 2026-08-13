@@ -98,6 +98,9 @@ public class PlayerScreen extends Screen {
     private Button deleteButton;
     private Button shuffleButton;
     private Button repeatButton;
+    private Button refreshButton;
+    /** Guards against rapid ⟳ clicks spawning overlapping scans whose callbacks could land out of order. */
+    private boolean refreshInProgress;
 
     public PlayerScreen() {
         super(Component.translatable("screen.taswell.title"));
@@ -139,8 +142,10 @@ public class PlayerScreen extends Screen {
 
     @Override
     public void onClose() {
-        // The volume slider (an OptionInstance-backed widget, see buildTransportBar) applies
-        // live on every drag tick already; this is what makes it durable across a restart.
+        // The volume slider (an OptionInstance-backed widget, see buildTransportBar) already
+        // applies live on every drag frame via its own built-in listener — this is the single
+        // point where the resulting value gets written to disk, so a whole-session drag only
+        // costs one synchronous file write, not one per frame.
         this.minecraft.options.save();
         super.onClose();
     }
@@ -413,14 +418,25 @@ public class PlayerScreen extends Screen {
         addRenderableWidget(repeatButton);
 
         int refreshX = x + width - bw;
-        addRenderableWidget(Button.builder(Component.literal("⟳"), b -> onRefresh())
-                .bounds(refreshX, y, bw, height).build());
+        refreshButton = Button.builder(Component.literal("⟳"), b -> onRefresh())
+                .bounds(refreshX, y, bw, height).build();
+        refreshButton.active = !refreshInProgress;
+        addRenderableWidget(refreshButton);
 
         int volumeWidth = 100;
         int volumeX = refreshX - GUTTER - volumeWidth;
         Options options = this.minecraft.options;
+        // No save() here on purpose — this callback fires on every drag-move frame (verified
+        // against the mapped OptionInstance/AbstractOptionSliderButton sources:
+        // applyValueImmediately() defaults true for sound sliders, so applyValue() → this
+        // callback runs per mouse-move during a drag), and Options.save() is a synchronous
+        // FileOutputStream write. The slider still applies live — OptionInstance.set(...)
+        // updates the live value and its own built-in listener already calls
+        // soundManager.refreshCategoryVolume(MUSIC) regardless of this callback. Persistence is
+        // handled once, on close (see onClose()) — matches vanilla's own options-screen
+        // convention of writing to disk on close rather than per frame.
         addRenderableWidget(options.getSoundSourceOptionInstance(SoundSource.MUSIC)
-                .createButton(options, volumeX, y, volumeWidth, value -> options.save()));
+                .createButton(options, volumeX, y, volumeWidth));
     }
 
     private void onShuffleClicked() {
@@ -446,7 +462,22 @@ public class PlayerScreen extends Screen {
         };
     }
 
+    /**
+     * {@link #refreshInProgress} guards this against rapid double/triple clicks: without it, a
+     * second click while a scan is still in flight would spawn a concurrent scan, and whichever
+     * of the two background threads happens to finish (and post back to the client thread) last
+     * wins — not necessarily the more recent click — silently reverting to a stale result. The
+     * button is also disabled for the duration so there's nothing to click during the guard
+     * window either, not just a click that's ignored.
+     */
     private void onRefresh() {
+        if (refreshInProgress) {
+            return;
+        }
+        refreshInProgress = true;
+        if (refreshButton != null) {
+            refreshButton.active = false;
+        }
         TaswellConfig cfg = ConfigStore.load(TaswellPaths.configFile());
         Path folder = cfg.musicFolder != null ? Path.of(cfg.musicFolder) : TaswellPaths.defaultMusicDir();
         Util.backgroundExecutor().execute(() -> {
@@ -454,6 +485,10 @@ public class PlayerScreen extends Screen {
             Minecraft.getInstance().execute(() -> {
                 library.setLocal(scanned);
                 refreshTrackList();
+                refreshInProgress = false;
+                if (refreshButton != null) {
+                    refreshButton.active = true;
+                }
             });
         });
     }
