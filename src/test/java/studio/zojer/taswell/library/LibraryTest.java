@@ -20,8 +20,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class LibraryTest {
 
-    private static Track vanilla(String id, String title) {
-        return new Track(id, title, "C418", TrackSource.VANILLA, "taswell:track." + id, null);
+    /**
+     * Builds a vanilla fixture with {@code id} set to the sound-event-id form
+     * ({@code "taswell:track." + slug}) — matching {@link VanillaTracks#load()}'s
+     * contract that vanilla track id and vanillaSoundEventId are the same string.
+     */
+    private static Track vanilla(String slug, String title) {
+        String soundEventId = "taswell:track." + slug;
+        return new Track(soundEventId, title, "C418", TrackSource.VANILLA, soundEventId, null);
     }
 
     private static Track local(String fileName, String title, String artist) {
@@ -48,7 +54,7 @@ class LibraryTest {
         List<Track> all = library.all();
 
         assertEquals(5, all.size());
-        assertTrue(all.stream().anyMatch(t -> t.id().equals("sweden")));
+        assertTrue(all.stream().anyMatch(t -> t.id().equals("taswell:track.sweden")));
         assertTrue(all.stream().anyMatch(t -> t.id().equals("local:alpha.mp3")));
     }
 
@@ -56,7 +62,7 @@ class LibraryTest {
     void byIdFindsVanillaAndLocalTracksAndIsEmptyForUnknown() {
         Library library = sampleLibrary();
 
-        assertEquals("Sweden", library.byId("sweden").map(Track::title).orElse(null));
+        assertEquals("Sweden", library.byId("taswell:track.sweden").map(Track::title).orElse(null));
         assertEquals("Alpha Song", library.byId("local:alpha.mp3").map(Track::title).orElse(null));
         assertTrue(library.byId("does-not-exist").isEmpty());
     }
@@ -70,7 +76,8 @@ class LibraryTest {
                 .findFirst().orElseThrow();
 
         assertEquals("C418", c418.name());
-        assertEquals(List.of("sweden", "taswell", "clark"), c418.trackIds());
+        assertEquals(List.of("taswell:track.sweden", "taswell:track.taswell", "taswell:track.clark"),
+                c418.trackIds());
     }
 
     @Test
@@ -95,8 +102,21 @@ class LibraryTest {
 
         assertEquals("Everything", everything.name());
         assertEquals(5, everything.trackIds().size());
-        assertTrue(everything.trackIds().contains("sweden"));
+        assertTrue(everything.trackIds().contains("taswell:track.sweden"));
         assertTrue(everything.trackIds().contains("local:alpha.mp3"));
+    }
+
+    @Test
+    void builtinC418IdsAreTheSoundEventIdFormPerPersistenceContract() {
+        // Persistence contract (Task 3): "vanilla = the sound event id
+        // (taswell:track.sweden)". byId must resolve a playlist id in exactly that
+        // form without translation.
+        Library library = sampleLibrary();
+
+        Optional<Track> sweden = library.byId("taswell:track.sweden");
+
+        assertTrue(sweden.isPresent());
+        assertEquals(sweden.get().id(), sweden.get().vanillaSoundEventId());
     }
 
     @Test
@@ -112,7 +132,7 @@ class LibraryTest {
     void resolveOfPlaylistNamingAVanishedFileYieldsNullTrackEntry() {
         Library library = sampleLibrary();
         Playlist playlist = new Playlist("custom:mix", "Mix", List.of(
-                "sweden",
+                "taswell:track.sweden",
                 "local:alpha.mp3",
                 "local:vanished.mp3"));
 
@@ -120,7 +140,7 @@ class LibraryTest {
 
         assertEquals(3, entries.size());
 
-        assertEquals("sweden", entries.get(0).trackId());
+        assertEquals("taswell:track.sweden", entries.get(0).trackId());
         assertEquals("Sweden", entries.get(0).track().title());
 
         assertEquals("local:alpha.mp3", entries.get(1).trackId());

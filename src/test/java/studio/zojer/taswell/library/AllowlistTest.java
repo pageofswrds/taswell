@@ -24,6 +24,10 @@ class AllowlistTest {
             assertEquals("C418", t.artist());
             assertTrue(t.vanillaSoundEventId().startsWith("taswell:track."));
             assertNull(t.localFile());
+            // Persistence contract (Task 3): vanilla track ids ARE the sound event id,
+            // so a playlist saved with "taswell:track.<slug>" ids resolves via
+            // Library.byId without translation.
+            assertEquals(t.vanillaSoundEventId(), t.id());
         }
         // spot checks
         assertTrue(tracks.stream().anyMatch(t -> t.title().equals("Sweden")));

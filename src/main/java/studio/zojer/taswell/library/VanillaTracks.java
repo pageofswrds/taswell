@@ -50,13 +50,16 @@ public final class VanillaTracks {
             List<AllowlistEntry> entries = gson.fromJson(
                     new InputStreamReader(in, StandardCharsets.UTF_8), listType);
             return entries.stream()
-                    .map(e -> new Track(
-                            e.slug(),
-                            e.title(),
-                            "C418",
-                            TrackSource.VANILLA,
-                            "taswell:track." + e.slug(),
-                            null))
+                    .map(e -> {
+                        String soundEventId = "taswell:track." + e.slug();
+                        return new Track(
+                                soundEventId,
+                                e.title(),
+                                "C418",
+                                TrackSource.VANILLA,
+                                soundEventId,
+                                null);
+                    })
                     .toList();
         } catch (IOException e) {
             throw new UncheckedIOException("failed to read " + ALLOWLIST_RESOURCE, e);
