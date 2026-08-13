@@ -38,10 +38,11 @@ Refresh** button in the player screen — there's no filesystem watcher, by desi
 button is honest; a poller isn't).
 
 Title/artist are read from ID3 tags when present (via jaudiotagger); otherwise the
-filename (minus extension) is used as the title. A file that fails to decode is still
-listed — visibly, with a failure marker rather than a silent omission — and skipped when
-its turn in rotation comes up; rotation always advances, it never gets stuck on a bad
-file.
+filename (minus extension) is used as the title. A file that fails to decode is logged
+and skipped when its turn in rotation comes up — rotation always advances, it never
+gets stuck on a bad file — but it still appears as an ordinary-looking row in the track
+list; there's no visual marker yet distinguishing it from a playable one. You can still
+click it directly (it'll just skip ahead again).
 
 The folder path is changeable from the player screen if you'd rather point it somewhere
 else than the default.
