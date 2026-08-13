@@ -3,6 +3,7 @@
 	"package": "studio.zojer.taswell.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
+		"MusicManagerMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
