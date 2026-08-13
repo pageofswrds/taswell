@@ -3,14 +3,14 @@
 	"id": "taswell",
 	"version": "${version}",
 	"name": "Taswell",
-	"description": "A client-side Minecraft mod.",
+	"description": "C418-only soundtrack + your own MP3s, with playlists and an in-game player.",
 	"authors": [
 		"zojer.studio"
 	],
 	"contact": {
 		"homepage": "https://zojer.studio"
 	},
-	"license": "CC0-1.0",
+	"license": "MIT",
 	"environment": "client",
 	"entrypoints": {
 		"client": [

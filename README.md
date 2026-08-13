@@ -44,8 +44,9 @@ gets stuck on a bad file — but it still appears as an ordinary-looking row in 
 list; there's no visual marker yet distinguishing it from a playable one. You can still
 click it directly (it'll just skip ahead again).
 
-The folder path is changeable from the player screen if you'd rather point it somewhere
-else than the default.
+The folder path is changeable via `musicFolder` in `config/taswell/config.json` if
+you'd rather point it somewhere else than the default (an in-UI control for this is
+future work — the player screen doesn't have one yet).
 
 ## Playlists
 
@@ -81,7 +82,7 @@ the active playlist once it ends.
 | --- | --- |
 | `M` | Open the player screen |
 | `.` | Skip to the next track |
-| `,` | Previous track (restarts the current track if pressed early; steps back one track if pressed again shortly after) |
+| `,` | Previous track (steps back one track if pressed early; restarts the current track if pressed again shortly after) |
 | `-` | Play/pause |
 
 All four are rebindable in Minecraft's own Controls screen, under the "taswell"
