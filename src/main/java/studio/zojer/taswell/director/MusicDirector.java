@@ -367,6 +367,15 @@ public final class MusicDirector {
         return config.activePlaylistId;
     }
 
+    /**
+     * Persisted HUD toggle. Added for Task 10 (now-playing HUD): the director already holds
+     * {@link TaswellConfig} privately and persists it; there was no accessor for this flag.
+     * Trivial getter — no behavior change.
+     */
+    public boolean hudEnabled() {
+        return config.hudEnabled;
+    }
+
     /** Registered listeners are notified (client thread) every time a new track starts — the HUD's hook. */
     public void onTrackStarted(Consumer<Track> listener) {
         trackStartedListeners.add(listener);

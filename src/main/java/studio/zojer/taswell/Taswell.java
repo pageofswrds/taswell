@@ -3,6 +3,7 @@ package studio.zojer.taswell;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.resources.Identifier;
 import org.lwjgl.glfw.GLFW;
@@ -10,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import studio.zojer.taswell.director.MusicDirector;
 import studio.zojer.taswell.library.VanillaTracks;
+import studio.zojer.taswell.ui.NowPlayingHud;
 import studio.zojer.taswell.ui.PlayerScreen;
 
 public class Taswell implements ClientModInitializer {
@@ -52,10 +54,22 @@ public class Taswell implements ClientModInitializer {
 
         MusicDirector director = MusicDirector.get();
         director.scanMusicFolderAsync();
-        // One tick handler drives both the director's own clock and the transport keybinds —
-        // deliberately not a second competing ClientTickEvents registration (see task brief).
+
+        // One instance, wired three ways: a permanent onTrackStarted listener (no unregister
+        // API exists — register once, here, never per-screen), ticked from the existing tick
+        // handler below (its only clock), and registered as a HUD element. See its class javadoc
+        // for the 26.2 HudElementRegistry/HudElement shapes this was verified against.
+        NowPlayingHud nowPlayingHud = new NowPlayingHud(director);
+        director.onTrackStarted(nowPlayingHud::onTrackStarted);
+        HudElementRegistry.addLast(
+                Identifier.fromNamespaceAndPath(MOD_ID, "now_playing"), nowPlayingHud);
+
+        // One tick handler drives the director's own clock, the transport keybinds, and the
+        // HUD's age counter — deliberately not a second competing ClientTickEvents registration
+        // (see task brief).
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             director.tick();
+            nowPlayingHud.tick();
             while (openKey.consumeClick()) {
                 client.gui.setScreen(new PlayerScreen());
             }
