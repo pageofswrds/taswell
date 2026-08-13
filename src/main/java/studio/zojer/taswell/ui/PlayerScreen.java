@@ -226,6 +226,10 @@ public class PlayerScreen extends Screen {
     private void onPlaylistSelected(Playlist playlist) {
         this.activePlaylistId = playlist.id();
         director.setActivePlaylist(playlist.id());
+        // A "sure?" armed on a *different* playlist's delete button must not silently carry over
+        // and fire on this one if the user comes back to it later — clear it on every selection
+        // change, not just when the button itself is clicked or its own timeout expires.
+        armedDeleteId = null;
         boolean editable = !isBuiltin(activePlaylistId);
         if (renameButton != null) {
             renameButton.active = editable;
@@ -275,7 +279,13 @@ public class PlayerScreen extends Screen {
         String idToDelete = activePlaylistId;
         customPlaylists.removeIf(p -> p.id().equals(idToDelete));
         savePlaylists();
-        String fallback = library.builtins().get(0).id();
+        // library.builtins() always synthesizes exactly three entries (c418/local/all — see
+        // Library#builtins), so this is currently unreachable, but a defensive guard here is
+        // cheap and avoids an IndexOutOfBoundsException crashing the screen if that invariant
+        // ever changes. Falling back to the id just deleted degrades no worse than before this
+        // guard existed — MusicDirector.activePlaylist() already handles an unresolved id.
+        List<Playlist> builtins = library.builtins();
+        String fallback = builtins.isEmpty() ? idToDelete : builtins.get(0).id();
         activePlaylistId = fallback;
         director.setActivePlaylist(fallback);
         this.rebuildWidgets();

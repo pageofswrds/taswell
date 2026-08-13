@@ -15,6 +15,7 @@ import studio.zojer.taswell.audio.LocalTrackSoundInstance;
 import studio.zojer.taswell.library.Library;
 import studio.zojer.taswell.library.LibraryScanner;
 import studio.zojer.taswell.library.VanillaTracks;
+import studio.zojer.taswell.rotation.GapTiming;
 import studio.zojer.taswell.rotation.RepeatMode;
 import studio.zojer.taswell.rotation.RotationEngine;
 import studio.zojer.taswell.store.ConfigStore;
@@ -26,9 +27,12 @@ import studio.zojer.taswell.track.TrackSource;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
@@ -97,6 +101,30 @@ public final class MusicDirector {
     private String lastTrackId;
     /** 1-deep history for {@link #previous()}. */
     private String previousTrackId;
+    /**
+     * The last {@code activePlaylistId} a warning was already logged for — {@link
+     * #activePlaylist()} falls back to an empty synthesized playlist whenever the configured id
+     * doesn't resolve (a stale/hand-edited/deleted-playlist id), and is called on every {@link
+     * #advance()}; without this guard the same warning would repeat every rotation cycle for the
+     * rest of the session instead of once.
+     */
+    private String lastWarnedUnresolvedPlaylistId;
+    /**
+     * Track ids that failed to start this session (spec §3: "allowlist path failing to resolve
+     * ... that track drops from the library for the session"). Populated in {@link #play} on a
+     * {@link SoundEngine.PlayResult#NOT_STARTED} result — most commonly a vanilla allowlist entry
+     * whose {@code sounds.json} mapping doesn't resolve to a real asset (a future MC version
+     * moving/renaming the underlying ogg). {@link #resolvedActivePlaylistIds} filters these out.
+     *
+     * <p>Without this, a failing track wedges the <em>whole playlist</em> rather than just
+     * itself: {@link #play} only advances {@link #lastTrackId} on success, so a {@code
+     * NOT_STARTED} result leaves it unchanged; in ordered mode {@link RotationEngine#next}
+     * treats an unchanged/not-found {@code lastTrackId} the same as "rotation hasn't started
+     * yet" and restarts from index 0 — which, unfiltered, is the same failing track every time.
+     * Confirmed live (see the task report): a bogus allowlist entry retried every gap cycle
+     * forever, logging a fresh warning each time, and no other C418 track ever played.
+     */
+    private final Set<String> failedTrackIds = new HashSet<>();
 
     private MusicDirector() {
         this.library = new Library(VanillaTracks.load());
@@ -116,10 +144,25 @@ public final class MusicDirector {
     public void scanMusicFolderAsync() {
         Path folder = musicFolder();
         Util.backgroundExecutor().execute(() -> {
-            List<Track> scanned = LibraryScanner.scan(folder);
+            List<Track> scanned;
+            try {
+                scanned = LibraryScanner.scan(folder);
+            } catch (RuntimeException e) {
+                // Mirrors PlayerScreen.onRefresh's guard: LibraryScanner.scan doesn't throw for
+                // ordinary cases (a missing folder yields an empty list), but this is the mod's
+                // very first scan — called once from Taswell.onInitializeClient() — so an
+                // unusual failure here (e.g. an IO error mid-scan) must not crash mod init or
+                // leave the library silently unset; leave it empty (its constructor default)
+                // and let a later Refresh in the PlayerScreen retry.
+                LOG.warn("taswell: initial scan of {} failed — starting with an empty local library", folder, e);
+                scanned = null;
+            }
+            List<Track> result = scanned;
             Minecraft.getInstance().execute(() -> {
-                library.setLocal(scanned);
-                LOG.debug("taswell: scanned {} local track(s) from {}", scanned.size(), folder);
+                if (result != null) {
+                    library.setLocal(result);
+                    LOG.debug("taswell: scanned {} local track(s) from {}", result.size(), folder);
+                }
             });
         });
     }
@@ -183,6 +226,7 @@ public final class MusicDirector {
     private void advance() {
         List<String> ids = resolvedActivePlaylistIds();
         if (ids.isEmpty()) {
+            stopToSilence();
             gapTicksRemaining = randomGapTicks();
             return;
         }
@@ -191,10 +235,29 @@ public final class MusicDirector {
             // RepeatMode.OFF, end of playlist reached: stay idle rather than stopping forever
             // on a zero gap — a future setActivePlaylist/setShuffle/cycleRepeat call will let
             // the next tick's advance() try again.
+            stopToSilence();
             gapTicksRemaining = randomGapTicks();
             return;
         }
         play(nextId.get());
+    }
+
+    /**
+     * Stops whatever's currently loaded and clears it, without picking a replacement. Only
+     * matters when {@link #advance()} is reached with something still playing — normally true
+     * only for a user-initiated {@link #next()} (the natural end-of-track path via {@link
+     * #onTrackEnded} already clears {@code currentTrack} before {@link #tick} ever calls {@link
+     * #advance()}) — and the active playlist has since become empty, or ordered/repeat-off
+     * rotation has reached its end: without this, {@link #next()} would silently no-op and leave
+     * the old track audibly playing, which looks like the skip button did nothing. Stopping to
+     * silence here is a deliberate, acceptable fallback — better than a skip that appears broken.
+     */
+    private void stopToSilence() {
+        if (currentTrack != null) {
+            stopCurrentInstance();
+            currentTrack = null;
+            playback.invalidate();
+        }
     }
 
     private void play(String trackId) {
@@ -211,7 +274,9 @@ public final class MusicDirector {
         SoundInstance instance = buildInstance(track, generation);
         SoundEngine.PlayResult result = Minecraft.getInstance().getSoundManager().play(instance);
         if (result == SoundEngine.PlayResult.NOT_STARTED) {
-            LOG.warn("taswell: failed to start track {} ({}) — skipping", track.id(), track.title());
+            LOG.warn("taswell: failed to start track {} ({}) — dropping it from rotation for the "
+                    + "rest of this session", track.id(), track.title());
+            failedTrackIds.add(trackId);
             currentInstance = null;
             currentTrack = null;
             playback.invalidate();
@@ -407,20 +472,35 @@ public final class MusicDirector {
         String id = config.activePlaylistId;
         return library.builtins().stream().filter(p -> p.id().equals(id)).findFirst()
                 .or(() -> customPlaylists.stream().filter(p -> p.id().equals(id)).findFirst())
-                .orElseGet(() -> new Playlist(id, id, List.of()));
+                .orElseGet(() -> {
+                    // A stale/deleted/hand-edited activePlaylistId that resolves to nothing:
+                    // degrade to an empty playlist (advance()'s empty-ids branch then just holds
+                    // idle) rather than throw. Warn once per distinct bad id, not every rotation
+                    // cycle — activePlaylist() is called from resolvedActivePlaylistIds() on
+                    // every advance(), and the id doesn't change on its own between advances.
+                    if (!Objects.equals(id, lastWarnedUnresolvedPlaylistId)) {
+                        LOG.warn("taswell: active playlist id {} does not resolve to any builtin or "
+                                + "custom playlist — degrading to an empty playlist", id);
+                        lastWarnedUnresolvedPlaylistId = id;
+                    }
+                    return new Playlist(id, id, List.of());
+                });
     }
 
     private List<String> resolvedActivePlaylistIds() {
         return library.resolve(activePlaylist()).stream()
                 .filter(entry -> entry.track() != null)
                 .map(Library.Entry::trackId)
+                .filter(id -> !failedTrackIds.contains(id))
                 .toList();
     }
 
+    /**
+     * Delegates to {@link GapTiming} (pure JVM, unit tested) — see its javadoc for why negative
+     * {@code minGapSeconds}/{@code maxGapSeconds} are clamped to zero rather than fed straight to
+     * {@link Random#nextInt(int)}.
+     */
     private int randomGapTicks() {
-        int min = Math.min(config.minGapSeconds, config.maxGapSeconds);
-        int max = Math.max(config.minGapSeconds, config.maxGapSeconds);
-        int seconds = min == max ? min : min + gapRandom.nextInt(max - min + 1);
-        return seconds * TICKS_PER_SECOND;
+        return GapTiming.computeTicks(config.minGapSeconds, config.maxGapSeconds, TICKS_PER_SECOND, gapRandom);
     }
 }

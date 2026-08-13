@@ -4,6 +4,8 @@ import org.jaudiotagger.audio.AudioFile;
 import org.jaudiotagger.audio.AudioFileIO;
 import org.jaudiotagger.tag.FieldKey;
 import org.jaudiotagger.tag.Tag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import studio.zojer.taswell.track.Track;
 import studio.zojer.taswell.track.TrackSource;
 
@@ -29,6 +31,7 @@ import java.util.stream.Stream;
  * the scanner's.
  */
 public final class LibraryScanner {
+    private static final Logger LOG = LoggerFactory.getLogger(LibraryScanner.class);
     private static final Set<String> SUPPORTED_EXTENSIONS = Set.of("mp3", "wav");
 
     private LibraryScanner() {
@@ -85,7 +88,10 @@ public final class LibraryScanner {
             }
         } catch (Exception e) {
             // Fall back to filename-derived title/empty artist — corrupt or unreadable
-            // files are still included as tracks; playability is playback's problem.
+            // files are still included as tracks; playability is playback's problem. Logged at
+            // debug (not warn): an untagged or unreadable file is an expected, routine case for
+            // this scanner (see class javadoc), not something the user needs surfaced by default.
+            LOG.debug("taswell: tag read failed for {} — falling back to filename-derived title", fileName, e);
         }
 
         return new Track(id, title, artist, TrackSource.LOCAL, null, file);

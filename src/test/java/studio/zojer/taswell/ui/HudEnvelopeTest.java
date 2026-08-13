@@ -16,6 +16,20 @@ class HudEnvelopeTest {
     private static final float OFF_SCREEN_X = -100f;
     private static final float REST_X = 8f;
 
+    /**
+     * Pins the envelope's literal tick constants (spec-mandated slide-in/hold/fade durations,
+     * not just an implementation detail the other tests happen to be parameterized over) so a
+     * future edit that quietly changes {@code SLIDE_TICKS}/{@code HOLD_TICKS}/{@code FADE_TICKS}
+     * fails a test rather than silently altering the HUD's timing.
+     */
+    @Test
+    void tickConstantsMatchSpec() {
+        assertEquals(5, HudEnvelope.SLIDE_TICKS);
+        assertEquals(80, HudEnvelope.HOLD_TICKS);
+        assertEquals(15, HudEnvelope.FADE_TICKS);
+        assertEquals(100, HudEnvelope.VISIBLE_TICKS);
+    }
+
     @Test
     void slideInStartsAtOffScreenX() {
         HudEnvelope.State state = HudEnvelope.compute(0, true, OFF_SCREEN_X, REST_X);
