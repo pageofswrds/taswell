@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -31,6 +32,24 @@ class PlaylistStoreTest {
         assertTrue(loaded.isEmpty());
         assertTrue(Files.exists(dir.resolve("playlists.json.bad")));
         assertFalse(Files.exists(f));
+    }
+
+    @Test
+    void loadStillReturnsEmptyListWhenQuarantineItselfFails(@TempDir Path dir) throws Exception {
+        Path f = dir.resolve("playlists.json");
+        Files.writeString(f, "{not valid json[");
+        // Block the quarantine move: make "playlists.json.bad" an existing non-empty
+        // directory, so Files.move(f, bad, REPLACE_EXISTING) fails.
+        Path bad = dir.resolve("playlists.json.bad");
+        Files.createDirectory(bad);
+        Files.writeString(bad.resolve("occupied.txt"), "x");
+
+        List<Playlist> loaded = assertDoesNotThrow(() -> PlaylistStore.load(f));
+
+        assertTrue(loaded.isEmpty());
+        // Quarantine couldn't complete, so the corrupt file is left in place rather
+        // than lost.
+        assertTrue(Files.exists(f));
     }
 
     @Test

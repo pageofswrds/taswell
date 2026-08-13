@@ -6,6 +6,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -20,6 +21,24 @@ class ConfigStoreTest {
         assertEquals("builtin:c418", cfg.activePlaylistId);
         assertTrue(Files.exists(dir.resolve("config.json.bad")));
         assertFalse(Files.exists(f));
+    }
+
+    @Test
+    void loadStillReturnsDefaultsWhenQuarantineItselfFails(@TempDir Path dir) throws Exception {
+        Path f = dir.resolve("config.json");
+        Files.writeString(f, "{nope");
+        // Block the quarantine move: make "config.json.bad" an existing non-empty
+        // directory, so Files.move(f, bad, REPLACE_EXISTING) fails.
+        Path bad = dir.resolve("config.json.bad");
+        Files.createDirectory(bad);
+        Files.writeString(bad.resolve("occupied.txt"), "x");
+
+        TaswellConfig cfg = assertDoesNotThrow(() -> ConfigStore.load(f));
+
+        assertEquals("builtin:c418", cfg.activePlaylistId);
+        // Quarantine couldn't complete, so the corrupt file is left in place rather
+        // than lost.
+        assertTrue(Files.exists(f));
     }
 
     @Test
