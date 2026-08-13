@@ -4,5 +4,7 @@
   "key.taswell.next": "Next Track",
   "key.taswell.previous": "Previous Track",
   "key.taswell.play_pause": "Play/Pause",
-  "screen.taswell.title": "taswell"
+  "screen.taswell.title": "taswell",
+  "gui.taswell.search": "Search",
+  "gui.taswell.playlist_name": "Playlist name"
 }

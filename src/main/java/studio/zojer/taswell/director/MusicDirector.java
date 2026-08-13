@@ -347,6 +347,26 @@ public final class MusicDirector {
         return paused;
     }
 
+    /**
+     * The library instance this director plays from. Added for Task 9 (PlayerScreen): the
+     * director already held this privately for its own rotation logic; the screen needs it too
+     * (browsing the catalog, resolving playlists, feeding a rescan's result back in) and there
+     * was no accessor. Trivial getter — no behavior change.
+     */
+    public Library library() {
+        return library;
+    }
+
+    /** Persisted shuffle flag. Added for Task 9: the screen needs this for the sidebar toggle's initial state. */
+    public boolean isShuffle() {
+        return config.shuffle;
+    }
+
+    /** Persisted active playlist id. Added for Task 9: seeds the sidebar's initial selection. */
+    public String activePlaylistId() {
+        return config.activePlaylistId;
+    }
+
     /** Registered listeners are notified (client thread) every time a new track starts — the HUD's hook. */
     public void onTrackStarted(Consumer<Track> listener) {
         trackStartedListeners.add(listener);
@@ -361,7 +381,8 @@ public final class MusicDirector {
         ConfigStore.save(TaswellPaths.configFile(), config);
     }
 
-    private RepeatMode repeatMode() {
+    /** Widened from {@code private} to {@code public} for Task 9 (PlayerScreen's repeat-cycle button label). Same body, no behavior change. */
+    public RepeatMode repeatMode() {
         try {
             return RepeatMode.valueOf(config.repeatMode);
         } catch (IllegalArgumentException | NullPointerException e) {
