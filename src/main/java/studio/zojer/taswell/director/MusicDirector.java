@@ -74,6 +74,13 @@ public final class MusicDirector {
     private final RotationEngine rotationEngine;
     private final Random gapRandom = new Random();
     private final List<Consumer<Track>> trackStartedListeners = new CopyOnWriteArrayList<>();
+    /**
+     * Guards against a stale end-of-track signal corrupting state — see its class javadoc for
+     * the race this exists to close (a local track's async {@code onFinished} callback and
+     * {@code tick()}'s {@code isActive} poll can both observe the same track ending, and either
+     * can race a user-initiated skip/pause/playNow that's already moved on).
+     */
+    private final PlaybackGeneration playback = new PlaybackGeneration();
 
     private TaswellConfig config;
     private List<Playlist> customPlaylists;
@@ -119,11 +126,16 @@ public final class MusicDirector {
 
     /**
      * Called every client tick ({@code ClientTickEvents.END_CLIENT_TICK}). While paused, or
-     * while a track is playing, there's nothing to do here: a local track's end arrives via its
-     * {@code onFinished} callback (see {@link #buildInstance}), and a vanilla track's end has no
-     * such callback, so it's polled here via {@code soundManager.isActive} — but only while a
-     * vanilla instance is actually current, never for local tracks (whose liveness is the
-     * callback's job, not this poll's). When idle, count down the gap; at zero, advance.
+     * while a track is playing, there's nothing to do here beyond a liveness poll: a local
+     * track's end normally arrives via its {@code onFinished} callback (see {@link
+     * #buildInstance}), and a vanilla track's end has no such callback at all — but {@code
+     * soundManager.isActive} is polled for <em>both</em> here as a backstop, not just vanilla.
+     * A local track's callback can be lost (e.g. {@code SoundEngine.stopAll()} from an audio
+     * device change or a resource reload tears the channel down without a stream EOF), which
+     * would otherwise wedge rotation silently for the rest of the session; {@link
+     * #playback}'s generation check makes it safe for the poll and the callback to race —
+     * whichever gets to {@link #onTrackEnded} first wins, the other is recognized as stale.
+     * When idle, count down the gap; at zero, advance.
      */
     public void tick() {
         if (paused) {
@@ -131,9 +143,9 @@ public final class MusicDirector {
         }
         if (currentTrack != null) {
             ticksSinceCurrentStarted++;
-            if (currentTrack.source() == TrackSource.VANILLA && currentInstance != null
+            if (currentInstance != null
                     && !Minecraft.getInstance().getSoundManager().isActive(currentInstance)) {
-                onTrackEnded();
+                onTrackEnded(playback.current());
             }
             return;
         }
@@ -146,14 +158,20 @@ public final class MusicDirector {
 
     /**
      * Called from a local track's {@code onFinished} callback (hopped to the client thread
-     * already) or from {@link #tick}'s vanilla-liveness poll. Never called for a user-initiated
-     * stop (pause, skip, playNow) — those manage state directly; per Task 5's finding, {@code
-     * LocalTrackSoundInstance} does not fire {@code onFinished} on stop-without-EOF, so this
-     * method would never see one anyway, but the guard below is cheap insurance against a stray
-     * late callback racing a state change.
+     * already, carrying the generation id captured when that track's {@link #play} started it)
+     * or from {@link #tick}'s liveness poll (which always passes {@link #playback}'s
+     * live-at-that-moment current generation). {@code generation} is checked against {@link
+     * #playback} before touching any state: a stale generation means either a newer track has
+     * since started (this is a signal for a track that's no longer current — e.g. a still-
+     * pending decode failure for a track {@link #next()} already skipped away from) or the
+     * other detection path already processed this exact end — either way, acting on it here
+     * would clear the wrong track's state or double-advance rotation. Never legitimately called
+     * for a user-initiated stop (pause, skip, playNow) — those manage state directly and
+     * invalidate {@link #playback} themselves — so in practice this only ever fires once per
+     * genuine end, from whichever of the two detectors got there first.
      */
-    private void onTrackEnded() {
-        if (currentTrack == null) {
+    private void onTrackEnded(long generation) {
+        if (!playback.endIfCurrent(generation)) {
             return;
         }
         currentInstance = null;
@@ -189,12 +207,14 @@ public final class MusicDirector {
         Track track = trackOpt.get();
         stopCurrentInstance();
 
-        SoundInstance instance = buildInstance(track);
+        long generation = playback.start();
+        SoundInstance instance = buildInstance(track, generation);
         SoundEngine.PlayResult result = Minecraft.getInstance().getSoundManager().play(instance);
         if (result == SoundEngine.PlayResult.NOT_STARTED) {
             LOG.warn("taswell: failed to start track {} ({}) — skipping", track.id(), track.title());
             currentInstance = null;
             currentTrack = null;
+            playback.invalidate();
             gapTicksRemaining = randomGapTicks();
             return;
         }
@@ -213,7 +233,13 @@ public final class MusicDirector {
         notifyTrackStarted(track);
     }
 
-    private SoundInstance buildInstance(Track track) {
+    /**
+     * @param generation this specific play attempt's id from {@link #playback} — captured by
+     *                    the local-track callback below so a late/duplicate signal for it can
+     *                    be recognized as stale by {@link #onTrackEnded(long)} even after a
+     *                    newer track has since started.
+     */
+    private SoundInstance buildInstance(Track track, long generation) {
         if (track.source() == TrackSource.VANILLA) {
             Identifier id = Identifier.parse(track.vanillaSoundEventId());
             SoundEvent event = BuiltInRegistries.SOUND_EVENT.getValue(id);
@@ -224,7 +250,8 @@ public final class MusicDirector {
             }
             return SimpleSoundInstance.forMusic(event);
         }
-        return new LocalTrackSoundInstance(track, () -> Minecraft.getInstance().execute(this::onTrackEnded));
+        return new LocalTrackSoundInstance(track,
+                () -> Minecraft.getInstance().execute(() -> onTrackEnded(generation)));
     }
 
     private void stopCurrentInstance() {
@@ -287,7 +314,11 @@ public final class MusicDirector {
         } else {
             paused = true;
             stopCurrentInstance();
-            // currentTrack is deliberately left set — that's what "remembers" it for unpause.
+            // A late signal for the just-stopped instance (a local track's callback, or the
+            // vanilla poll if it were still running) must not reach onTrackEnded and clear
+            // currentTrack out from under the pause — it's deliberately left set below, that's
+            // what "remembers" it for unpause.
+            playback.invalidate();
         }
     }
 
@@ -323,9 +354,7 @@ public final class MusicDirector {
 
     private void notifyTrackStarted(Track track) {
         LOG.debug("taswell: now playing {} — {} ({})", track.title(), track.artist(), track.id());
-        for (Consumer<Track> listener : trackStartedListeners) {
-            listener.accept(track);
-        }
+        TrackStartedNotifier.notifyAll(trackStartedListeners, track, LOG);
     }
 
     private void saveConfig() {

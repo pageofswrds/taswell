@@ -2,11 +2,15 @@ package studio.zojer.taswell.rotation;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -119,6 +123,79 @@ class RotationEngineTest {
 
         assertTrue(next.isPresent());
         assertTrue(playlist.contains(next.get()));
+    }
+
+    /**
+     * Review finding: a playlist where every entry equals {@code lastTrackId} (a hand-edited
+     * {@code playlists.json}, never deduped by {@code Library.resolve}) used to spin the
+     * rejection-sampling loop forever — a hard freeze if reached from {@code
+     * MusicDirector.tick()} on the client thread. Wrapped in {@code assertTimeoutPreemptively}
+     * so a regression fails fast instead of hanging the whole test run.
+     */
+    @Test
+    void shuffleWithAllEntriesEqualToLastTrackIdTerminatesAndReturnsThatId() {
+        RotationEngine engine = new RotationEngine(42);
+        List<String> playlist = List.of("a", "a", "a");
+
+        Optional<String> next = assertTimeoutPreemptively(Duration.ofSeconds(2),
+                () -> engine.next(playlist, "a", true, RepeatMode.PLAYLIST));
+
+        assertEquals(Optional.of("a"), next);
+    }
+
+    /** Same all-duplicates termination guarantee, exercised many times for extra confidence. */
+    @Test
+    void shuffleWithAllEntriesEqualToLastTrackIdTerminatesOverManyDraws() {
+        RotationEngine engine = new RotationEngine(2026);
+        List<String> playlist = List.of("x", "x");
+
+        assertTimeoutPreemptively(Duration.ofSeconds(2), () -> {
+            for (int i = 0; i < 200; i++) {
+                assertEquals(Optional.of("x"), engine.next(playlist, "x", true, RepeatMode.PLAYLIST));
+            }
+        });
+    }
+
+    /**
+     * Documents the known, out-of-scope-to-fully-fix limitation from the class javadoc: ordered
+     * mode positions via {@code indexOf(lastTrackId)}, which always finds the first occurrence.
+     * A playlist with a duplicate id therefore cycles between the duplicate and whatever
+     * immediately follows its first occurrence, and never reaches anything after a later
+     * occurrence of that id. This test locks in that documented behavior rather than leaving it
+     * as an unverified claim in a comment.
+     */
+    @Test
+    void orderedModeWithDuplicateIdsCyclesAndNeverReachesEntryAfterALaterDuplicate() {
+        RotationEngine engine = new RotationEngine(42);
+        List<String> playlist = List.of("a", "b", "a", "c");
+
+        String last = "a";
+        for (int i = 0; i < 10; i++) {
+            String next = engine.next(playlist, last, false, RepeatMode.PLAYLIST).orElseThrow();
+            assertNotEquals("c", next, "should never reach the entry after the second 'a'");
+            assertTrue(next.equals("a") || next.equals("b"));
+            last = next;
+        }
+    }
+
+    /**
+     * The flip side of the duplicate-id caveat: when ids are genuinely unique (the case every
+     * real caller is in — see the class javadoc), ordered mode is guaranteed to visit every one
+     * of them, in order, before it ever repeats.
+     */
+    @Test
+    void orderedModeVisitsEveryUniqueIdBeforeRepeatingWhenIdsAreUnique() {
+        RotationEngine engine = new RotationEngine(42);
+        List<String> playlist = List.of("a", "b", "c", "d");
+
+        Set<String> visited = new LinkedHashSet<>();
+        String last = null;
+        for (int i = 0; i < playlist.size(); i++) {
+            String next = engine.next(playlist, last, false, RepeatMode.PLAYLIST).orElseThrow();
+            assertTrue(visited.add(next), "repeated " + next + " before visiting every id: " + visited);
+            last = next;
+        }
+        assertEquals(Set.copyOf(playlist), visited);
     }
 
     @Test
