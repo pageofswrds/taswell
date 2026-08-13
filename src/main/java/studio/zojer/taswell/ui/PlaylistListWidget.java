@@ -69,7 +69,8 @@ public final class PlaylistListWidget extends ObjectSelectionList<PlaylistListWi
 
         @Override
         public void extractContent(GuiGraphicsExtractor graphics, int mouseX, int mouseY, boolean hovered, float a) {
-            int color = playlist.builtin() ? 0xC0C0C0 : 0xFFFFFF;
+            // Full ARGB required: 26.2's text() drops zero-alpha colors (see TrackListWidget).
+            int color = playlist.builtin() ? 0xFFC0C0C0 : 0xFFFFFFFF;
             int textY = getContentY() + (getContentHeight() - PlaylistListWidget.this.minecraft.font.lineHeight) / 2;
             graphics.text(PlaylistListWidget.this.minecraft.font, playlist.name(), getContentX(), textY, color);
         }

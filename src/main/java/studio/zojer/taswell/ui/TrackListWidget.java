@@ -83,7 +83,9 @@ public final class TrackListWidget extends ObjectSelectionList<TrackListWidget.E
             boolean nowPlaying = !missing && track.id().equals(nowPlayingId);
             String base = missing ? entry.trackId() : track.title() + " — " + track.artist();
             String label = nowPlaying ? "♪ " + base : base;
-            int color = missing ? 0x808080 : 0xFFFFFF;
+            // Full ARGB required: 26.2's GuiGraphicsExtractor.text() silently drops any draw
+            // whose color has a zero alpha byte (if (ARGB.alpha(color) != 0) { ... }).
+            int color = missing ? 0xFF808080 : 0xFFFFFFFF;
             Component text = missing ? Component.literal(label).withStyle(ChatFormatting.ITALIC) : Component.literal(label);
             int textY = getContentY() + (getContentHeight() - font.lineHeight) / 2;
             graphics.text(font, text, getContentX(), textY, color);
@@ -91,7 +93,7 @@ public final class TrackListWidget extends ObjectSelectionList<TrackListWidget.E
             if (membershipEditable && !missing) {
                 boolean member = memberIds.contains(track.id());
                 String glyph = member ? "-" : "+";
-                int glyphColor = member ? 0xFF5555 : 0x55FF55;
+                int glyphColor = member ? 0xFFFF5555 : 0xFF55FF55;
                 graphics.text(font, glyph, getContentRight() - TOGGLE_WIDTH, textY, glyphColor);
             }
         }
