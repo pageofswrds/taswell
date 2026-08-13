@@ -38,7 +38,8 @@ class AllowlistTest {
             String key = t.vanillaSoundEventId().substring("taswell:".length());
             assertTrue(sounds.has(key), "sounds.json missing " + key);
             JsonObject entry = sounds.getAsJsonObject(key).getAsJsonArray("sounds").get(0).getAsJsonObject();
-            assertTrue(entry.get("name").getAsString().startsWith("minecraft:music"), key);
+            String name = entry.get("name").getAsString();
+            assertTrue(name.startsWith("minecraft:music") || name.startsWith("minecraft:records/"), key);
             assertTrue(entry.get("stream").getAsBoolean(), key);
         }
     }

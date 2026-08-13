@@ -158,5 +158,65 @@
     "slug": "warmth",
     "title": "Warmth",
     "path": "music/game/nether/warmth"
+  },
+  {
+    "slug": "11",
+    "title": "11",
+    "path": "records/11"
+  },
+  {
+    "slug": "13",
+    "title": "13",
+    "path": "records/13"
+  },
+  {
+    "slug": "blocks",
+    "title": "Blocks",
+    "path": "records/blocks"
+  },
+  {
+    "slug": "cat",
+    "title": "Cat",
+    "path": "records/cat"
+  },
+  {
+    "slug": "chirp",
+    "title": "Chirp",
+    "path": "records/chirp"
+  },
+  {
+    "slug": "far",
+    "title": "Far",
+    "path": "records/far"
+  },
+  {
+    "slug": "mall",
+    "title": "Mall",
+    "path": "records/mall"
+  },
+  {
+    "slug": "mellohi",
+    "title": "Mellohi",
+    "path": "records/mellohi"
+  },
+  {
+    "slug": "stal",
+    "title": "Stal",
+    "path": "records/stal"
+  },
+  {
+    "slug": "strad",
+    "title": "Strad",
+    "path": "records/strad"
+  },
+  {
+    "slug": "wait",
+    "title": "Wait",
+    "path": "records/wait"
+  },
+  {
+    "slug": "ward",
+    "title": "Ward",
+    "path": "records/ward"
   }
 ]

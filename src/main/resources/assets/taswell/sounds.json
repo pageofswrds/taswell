@@ -1,4 +1,20 @@
 {
+  "track.11": {
+    "sounds": [
+      {
+        "name": "minecraft:records/11",
+        "stream": true
+      }
+    ]
+  },
+  "track.13": {
+    "sounds": [
+      {
+        "name": "minecraft:records/13",
+        "stream": true
+      }
+    ]
+  },
   "track.alpha": {
     "sounds": [
       {
@@ -55,10 +71,34 @@
       }
     ]
   },
+  "track.blocks": {
+    "sounds": [
+      {
+        "name": "minecraft:records/blocks",
+        "stream": true
+      }
+    ]
+  },
   "track.boss": {
     "sounds": [
       {
         "name": "minecraft:music/game/end/boss",
+        "stream": true
+      }
+    ]
+  },
+  "track.cat": {
+    "sounds": [
+      {
+        "name": "minecraft:records/cat",
+        "stream": true
+      }
+    ]
+  },
+  "track.chirp": {
+    "sounds": [
+      {
+        "name": "minecraft:records/chirp",
         "stream": true
       }
     ]
@@ -119,6 +159,14 @@
       }
     ]
   },
+  "track.far": {
+    "sounds": [
+      {
+        "name": "minecraft:records/far",
+        "stream": true
+      }
+    ]
+  },
   "track.floating_trees": {
     "sounds": [
       {
@@ -155,6 +203,22 @@
     "sounds": [
       {
         "name": "minecraft:music/game/living_mice",
+        "stream": true
+      }
+    ]
+  },
+  "track.mall": {
+    "sounds": [
+      {
+        "name": "minecraft:records/mall",
+        "stream": true
+      }
+    ]
+  },
+  "track.mellohi": {
+    "sounds": [
+      {
+        "name": "minecraft:records/mellohi",
         "stream": true
       }
     ]
@@ -207,6 +271,22 @@
       }
     ]
   },
+  "track.stal": {
+    "sounds": [
+      {
+        "name": "minecraft:records/stal",
+        "stream": true
+      }
+    ]
+  },
+  "track.strad": {
+    "sounds": [
+      {
+        "name": "minecraft:records/strad",
+        "stream": true
+      }
+    ]
+  },
   "track.subwoofer_lullaby": {
     "sounds": [
       {
@@ -235,6 +315,22 @@
     "sounds": [
       {
         "name": "minecraft:music/game/end/the_end",
+        "stream": true
+      }
+    ]
+  },
+  "track.wait": {
+    "sounds": [
+      {
+        "name": "minecraft:records/wait",
+        "stream": true
+      }
+    ]
+  },
+  "track.ward": {
+    "sounds": [
+      {
+        "name": "minecraft:records/ward",
         "stream": true
       }
     ]
