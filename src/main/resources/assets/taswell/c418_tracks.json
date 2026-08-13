@@ -1,0 +1,162 @@
+[
+  {
+    "slug": "beginning_2",
+    "title": "Beginning 2",
+    "path": "music/menu/beginning_2"
+  },
+  {
+    "slug": "floating_trees",
+    "title": "Floating Trees",
+    "path": "music/menu/floating_trees"
+  },
+  {
+    "slug": "moog_city_2",
+    "title": "Moog City 2",
+    "path": "music/menu/moog_city_2"
+  },
+  {
+    "slug": "mutation",
+    "title": "Mutation",
+    "path": "music/menu/mutation"
+  },
+  {
+    "slug": "minecraft",
+    "title": "Minecraft",
+    "path": "music/game/minecraft"
+  },
+  {
+    "slug": "clark",
+    "title": "Clark",
+    "path": "music/game/clark"
+  },
+  {
+    "slug": "sweden",
+    "title": "Sweden",
+    "path": "music/game/sweden"
+  },
+  {
+    "slug": "subwoofer_lullaby",
+    "title": "Subwoofer Lullaby",
+    "path": "music/game/subwoofer_lullaby"
+  },
+  {
+    "slug": "key",
+    "title": "Key",
+    "path": "music/game/key"
+  },
+  {
+    "slug": "haggstrom",
+    "title": "Haggstrom",
+    "path": "music/game/haggstrom"
+  },
+  {
+    "slug": "danny",
+    "title": "Danny",
+    "path": "music/game/danny"
+  },
+  {
+    "slug": "dry_hands",
+    "title": "Dry Hands",
+    "path": "music/game/dry_hands"
+  },
+  {
+    "slug": "wet_hands",
+    "title": "Wet Hands",
+    "path": "music/game/wet_hands"
+  },
+  {
+    "slug": "mice_on_venus",
+    "title": "Mice on Venus",
+    "path": "music/game/mice_on_venus"
+  },
+  {
+    "slug": "oxygene",
+    "title": "Oxygène",
+    "path": "music/game/oxygene"
+  },
+  {
+    "slug": "living_mice",
+    "title": "Living Mice",
+    "path": "music/game/living_mice"
+  },
+  {
+    "slug": "aria_math",
+    "title": "Aria Math",
+    "path": "music/game/creative/aria_math"
+  },
+  {
+    "slug": "biome_fest",
+    "title": "Biome Fest",
+    "path": "music/game/creative/biome_fest"
+  },
+  {
+    "slug": "blind_spots",
+    "title": "Blind Spots",
+    "path": "music/game/creative/blind_spots"
+  },
+  {
+    "slug": "dreiton",
+    "title": "Dreiton",
+    "path": "music/game/creative/dreiton"
+  },
+  {
+    "slug": "taswell",
+    "title": "Taswell",
+    "path": "music/game/creative/taswell"
+  },
+  {
+    "slug": "haunt_muskie",
+    "title": "Haunt Muskie",
+    "path": "music/game/creative/haunt_muskie"
+  },
+  {
+    "slug": "axolotl",
+    "title": "Axolotl",
+    "path": "music/game/water/axolotl"
+  },
+  {
+    "slug": "dragon_fish",
+    "title": "Dragon Fish",
+    "path": "music/game/water/dragon_fish"
+  },
+  {
+    "slug": "shuniji",
+    "title": "Shuniji",
+    "path": "music/game/water/shuniji"
+  },
+  {
+    "slug": "alpha",
+    "title": "Alpha",
+    "path": "music/game/end/alpha"
+  },
+  {
+    "slug": "boss",
+    "title": "Boss",
+    "path": "music/game/end/boss"
+  },
+  {
+    "slug": "the_end",
+    "title": "The End",
+    "path": "music/game/end/the_end"
+  },
+  {
+    "slug": "concrete_halls",
+    "title": "Concrete Halls",
+    "path": "music/game/nether/concrete_halls"
+  },
+  {
+    "slug": "dead_voxel",
+    "title": "Dead Voxel",
+    "path": "music/game/nether/dead_voxel"
+  },
+  {
+    "slug": "ballad_of_the_cats",
+    "title": "Ballad of the Cats",
+    "path": "music/game/nether/ballad_of_the_cats"
+  },
+  {
+    "slug": "warmth",
+    "title": "Warmth",
+    "path": "music/game/nether/warmth"
+  }
+]

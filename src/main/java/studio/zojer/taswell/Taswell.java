@@ -3,6 +3,7 @@ package studio.zojer.taswell;
 import net.fabricmc.api.ClientModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import studio.zojer.taswell.library.VanillaTracks;
 
 public class Taswell implements ClientModInitializer {
     public static final String MOD_ID = "taswell";
@@ -10,6 +11,7 @@ public class Taswell implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        VanillaTracks.registerSoundEvents();
         LOG.info("taswell loaded");
     }
 }
