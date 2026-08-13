@@ -1,6 +1,7 @@
 package studio.zojer.taswell.director;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.WinScreen;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.SoundEngine;
@@ -135,6 +136,25 @@ public final class MusicDirector {
     }
 
     /**
+     * Re-reads custom playlists from disk, replacing {@link #customPlaylists} wholesale — the
+     * fix for a real bug: this director previously loaded {@code playlists.json} exactly once,
+     * in its constructor, and never again, so any playlist created or edited in a session (via
+     * {@link studio.zojer.taswell.ui.PlayerScreen}, which keeps and persists its own separate
+     * in-memory copy) was invisible to {@link #activePlaylist()} until the game restarted — a
+     * newly-created active playlist would resolve to nothing and silently degrade to the
+     * warn-once empty-playlist fallback in {@link #activePlaylist()}'s {@code orElseGet}.
+     *
+     * <p>Called from {@link studio.zojer.taswell.ui.PlayerScreen} wherever its own copy is
+     * persisted or the active selection changes (see its {@code savePlaylists()} and {@code
+     * onPlaylistSelected}) — client-thread-only, like every other method here, and trivial: a
+     * single {@link PlaylistStore#load} call, same shape as the constructor's own initial load.
+     */
+    public void reloadPlaylists() {
+        this.customPlaylists = new ArrayList<>(PlaylistStore.load(TaswellPaths.playlistsFile()));
+        LOG.debug("taswell: reloaded {} custom playlist(s) from disk", customPlaylists.size());
+    }
+
+    /**
      * Kicks off the local-folder scan on {@link Util#backgroundExecutor()}, posting the result
      * back to the client thread via {@code Minecraft.getInstance().execute(...)} — the initial
      * scan can touch many files (ID3 reads per track) so it must never run inline on the client
@@ -179,8 +199,21 @@ public final class MusicDirector {
      * #playback}'s generation check makes it safe for the poll and the callback to race —
      * whichever gets to {@link #onTrackEnded} first wins, the other is recognized as stale.
      * When idle, count down the gap; at zero, advance.
+     *
+     * <p>Checked before anything else: {@link #isCredits()}, {@code MusicManagerMixin}'s own
+     * escape hatch for the End-credits {@link WinScreen} (vanilla's scripted credits track is
+     * allowed to play there, unsuppressed). Without a matching hold here, this director would
+     * keep advancing/starting tracks underneath the credits track (talking over it), and
+     * wouldn't stop whatever was already playing the moment credits begin. Entering credits
+     * stops the current instance outright (via {@link #stopIfPlayingForCredits()}) and this
+     * method returns without counting down the gap or advancing, so nothing new starts until
+     * credits end and a normal tick resumes the gap countdown where it left off.
      */
     public void tick() {
+        if (isCredits()) {
+            stopIfPlayingForCredits();
+            return;
+        }
         if (paused) {
             return;
         }
@@ -326,6 +359,30 @@ public final class MusicDirector {
         }
     }
 
+    /** Mirrors {@code MusicManagerMixin}'s own check — see that class's javadoc for why. */
+    private static boolean isCredits() {
+        return Minecraft.getInstance().gui.screen() instanceof WinScreen;
+    }
+
+    /**
+     * Entering credits stops whatever this director has currently loaded — same stop +
+     * {@link PlaybackGeneration#invalidate()} shape as {@link #stopToSilence()}, so a late
+     * callback/poll for the just-stopped instance can't sneak in and advance rotation while
+     * credits are showing — but guarded on {@code currentInstance != null} rather than {@code
+     * currentTrack != null}: a paused, remembered-for-resume track ({@link #togglePause()}
+     * already stopped its instance and left {@code currentTrack} set on purpose, for unpause to
+     * restart) must not be cleared out just because credits happen to show while paused.
+     */
+    private void stopIfPlayingForCredits() {
+        if (currentInstance != null) {
+            LOG.debug("taswell: credits screen active — stopping {} ({})",
+                    currentTrack.title(), currentTrack.id());
+            stopCurrentInstance();
+            currentTrack = null;
+            playback.invalidate();
+        }
+    }
+
     /** Plays {@code trackId} immediately, interrupting whatever's current. Rotation continuity is untouched beyond {@code lastTrackId} becoming this id — an "interjection", not a rotation pick. */
     public void playNow(String trackId) {
         paused = false;
@@ -339,12 +396,15 @@ public final class MusicDirector {
     }
 
     /**
-     * Restarts the current track if it began less than {@link #PREVIOUS_RESTART_WINDOW_TICKS}
-     * ago, otherwise steps back to the remembered previous track (1-deep history only — a
-     * second consecutive {@code previous()} call restarts rather than stepping further back).
-     * If nothing is currently loaded (idle in the gap), falls back to the remembered previous
-     * track, or a fresh {@link #advance()} if there's no history yet — this fallback isn't
-     * spelled out by the brief's two named cases, but avoids doing nothing on a button press.
+     * Steps back to the remembered previous track if the current one began less than {@link
+     * #PREVIOUS_RESTART_WINDOW_TICKS} ago, otherwise restarts the current track (1-deep history
+     * only — a second consecutive {@code previous()} call, now within the restart window of the
+     * track it just stepped back to, restarts that track rather than stepping further back).
+     * This is the same convention most media players use: an early press means "I meant the one
+     * before this," a later press means "start this one over." If nothing is currently loaded
+     * (idle in the gap), falls back to the remembered previous track, or a fresh {@link
+     * #advance()} if there's no history yet — this fallback isn't spelled out by the brief's two
+     * named cases, but avoids doing nothing on a button press.
      */
     public void previous() {
         paused = false;

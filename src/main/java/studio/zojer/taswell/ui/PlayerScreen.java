@@ -225,6 +225,12 @@ public class PlayerScreen extends Screen {
 
     private void onPlaylistSelected(Playlist playlist) {
         this.activePlaylistId = playlist.id();
+        // Belt-and-suspenders alongside savePlaylists()'s reload: makes activation robust even
+        // if this screen's in-memory customPlaylists ever drifts ahead of what's on disk without
+        // going through savePlaylists() first, and keeps the director's rotation source in sync
+        // with disk at the moment the user actually commits to a playlist, not just when one is
+        // edited.
+        director.reloadPlaylists();
         director.setActivePlaylist(playlist.id());
         // A "sure?" armed on a *different* playlist's delete button must not silently carry over
         // and fire on this one if the user comes back to it later — clear it on every selection
@@ -538,6 +544,11 @@ public class PlayerScreen extends Screen {
 
     private void savePlaylists() {
         PlaylistStore.save(TaswellPaths.playlistsFile(), customPlaylists);
+        // MusicDirector keeps its own separate copy of custom playlists (loaded once at
+        // construction) for resolving the active rotation — without this, a playlist created,
+        // renamed, or edited here would be invisible to the director until the game restarted
+        // (see MusicDirector.reloadPlaylists()'s javadoc for the bug this closes).
+        director.reloadPlaylists();
     }
 
     private static boolean isBuiltin(String id) {
