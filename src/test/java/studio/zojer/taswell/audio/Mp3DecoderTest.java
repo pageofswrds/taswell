@@ -5,12 +5,14 @@ import org.junit.jupiter.api.io.TempDir;
 
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -107,5 +109,40 @@ class Mp3DecoderTest {
                         }
                     }
                 }));
+    }
+
+    /**
+     * Covers the resource-leak fix directly: when the second {@code AudioSystem
+     * .getAudioInputStream(AudioFormat, AudioInputStream)} call rejects the conversion (thrown
+     * as {@link IllegalArgumentException}, no registered {@code FormatConversionProvider}
+     * supports it), the raw stream passed in — and its underlying handle — must still be
+     * closed rather than leaked.
+     *
+     * <p>No real mp3/wav fixture reliably triggers this branch: {@link Mp3Decoder#open} always
+     * builds its target PCM format from the source's own sample rate and channel count, which
+     * every source mp3spi/the JDK can actually decode is, by construction, convertible to. So
+     * this drives {@link Mp3Decoder#convertToPcm} directly with a raw stream carrying a made-up
+     * {@link AudioFormat.Encoding} that no conversion provider on the classpath — mp3spi,
+     * tritonus-share, or the JDK's own — can possibly claim to support, which is a
+     * deterministic, cross-platform way to force the failure branch (pure SPI-registry lookup,
+     * no OS audio backend involved).
+     */
+    @Test
+    void conversionFailureClosesTheRawStream() {
+        AudioFormat.Encoding unsupportedEncoding = new AudioFormat.Encoding("Mp3DecoderTest-unsupported");
+        AudioFormat unsupportedSource = new AudioFormat(unsupportedEncoding, 44100f, 16, 1, 2, 44100f, false);
+        byte[] data = new byte[32];
+        AtomicBoolean underlyingClosed = new AtomicBoolean(false);
+        InputStream underlying = new ByteArrayInputStream(data) {
+            @Override
+            public void close() throws IOException {
+                underlyingClosed.set(true);
+                super.close();
+            }
+        };
+        AudioInputStream raw = new AudioInputStream(underlying, unsupportedSource, data.length / unsupportedSource.getFrameSize());
+
+        assertThrows(IllegalArgumentException.class, () -> Mp3Decoder.convertToPcm(raw));
+        assertTrue(underlyingClosed.get(), "raw stream's underlying handle should be closed when PCM conversion fails");
     }
 }

@@ -28,10 +28,38 @@ public final class Mp3Decoder {
      */
     public static AudioInputStream open(Path file) throws UnsupportedAudioFileException, IOException {
         AudioInputStream raw = AudioSystem.getAudioInputStream(file.toFile()); // mp3spi SPI handles mp3
-        AudioFormat src = raw.getFormat();
-        AudioFormat pcm = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED,
-                src.getSampleRate(), 16, src.getChannels(),
-                src.getChannels() * 2, src.getSampleRate(), false);
-        return AudioSystem.getAudioInputStream(pcm, raw);
+        return convertToPcm(raw);
+    }
+
+    /**
+     * Converts an already-opened {@link AudioInputStream} to signed 16-bit PCM at its own
+     * sample rate/channel count. Package-private (not {@code private}) so
+     * {@code Mp3DecoderTest} can drive the failure branch directly with a raw stream whose
+     * format is guaranteed unconvertible, without depending on a real file that happens to
+     * trigger it.
+     *
+     * <p>{@code raw} is closed before this method returns abnormally: {@link
+     * AudioSystem#getAudioInputStream(AudioFormat, AudioInputStream)} throws (unchecked)
+     * {@link IllegalArgumentException} when no {@code FormatConversionProvider} supports the
+     * requested conversion, and without this catch, {@code raw} — and the file handle
+     * {@link #open} opened it from — would leak. On success, {@code raw} is left open: it's
+     * cascade-closed by the returned stream's {@code close()}, since PCM decoding reads through
+     * it.
+     */
+    static AudioInputStream convertToPcm(AudioInputStream raw) {
+        try {
+            AudioFormat src = raw.getFormat();
+            AudioFormat pcm = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED,
+                    src.getSampleRate(), 16, src.getChannels(),
+                    src.getChannels() * 2, src.getSampleRate(), false);
+            return AudioSystem.getAudioInputStream(pcm, raw);
+        } catch (IllegalArgumentException e) {
+            try {
+                raw.close();
+            } catch (IOException closeFailure) {
+                e.addSuppressed(closeFailure);
+            }
+            throw e;
+        }
     }
 }
