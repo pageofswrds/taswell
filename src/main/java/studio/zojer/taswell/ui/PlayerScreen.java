@@ -11,6 +11,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Util;
 import org.lwjgl.glfw.GLFW;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import studio.zojer.taswell.TaswellPaths;
 import studio.zojer.taswell.director.MusicDirector;
 import studio.zojer.taswell.library.Library;
@@ -62,6 +64,8 @@ import java.util.UUID;
  * than silently assumed — worth a second look.
  */
 public class PlayerScreen extends Screen {
+    private static final Logger LOG = LoggerFactory.getLogger(PlayerScreen.class);
+
     private static final int PANEL_WIDTH_PCT = 85;
     private static final int PANEL_HEIGHT_PCT = 80;
     private static final int SIDEBAR_WIDTH_PCT = 30;
@@ -469,6 +473,13 @@ public class PlayerScreen extends Screen {
      * wins — not necessarily the more recent click — silently reverting to a stale result. The
      * button is also disabled for the duration so there's nothing to click during the guard
      * window either, not just a click that's ignored.
+     *
+     * <p>Both the background scan and the client-thread post-back are defended against throwing
+     * an exception that would leave {@link #refreshInProgress} stuck {@code true} forever (and
+     * the button permanently disabled) — {@link LibraryScanner#scan} doesn't throw for ordinary
+     * cases (a missing folder yields an empty list), but this guards the unusual ones (e.g. an
+     * IO error mid-scan) anyway, since a wedged refresh button for the rest of the screen's life
+     * is a worse failure mode than a scan that silently fails once and can be retried.
      */
     private void onRefresh() {
         if (refreshInProgress) {
@@ -481,13 +492,25 @@ public class PlayerScreen extends Screen {
         TaswellConfig cfg = ConfigStore.load(TaswellPaths.configFile());
         Path folder = cfg.musicFolder != null ? Path.of(cfg.musicFolder) : TaswellPaths.defaultMusicDir();
         Util.backgroundExecutor().execute(() -> {
-            List<Track> scanned = LibraryScanner.scan(folder);
+            List<Track> scanned;
+            try {
+                scanned = LibraryScanner.scan(folder);
+            } catch (RuntimeException e) {
+                LOG.warn("taswell: refresh scan of {} failed — leaving the local library unchanged", folder, e);
+                scanned = null;
+            }
+            List<Track> result = scanned;
             Minecraft.getInstance().execute(() -> {
-                library.setLocal(scanned);
-                refreshTrackList();
-                refreshInProgress = false;
-                if (refreshButton != null) {
-                    refreshButton.active = true;
+                try {
+                    if (result != null) {
+                        library.setLocal(result);
+                    }
+                    refreshTrackList();
+                } finally {
+                    refreshInProgress = false;
+                    if (refreshButton != null) {
+                        refreshButton.active = true;
+                    }
                 }
             });
         });
